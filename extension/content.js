@@ -486,22 +486,39 @@ function escape(str) {
    LANGUAGE DETECTION (lightweight)
    Heuristic: enough Latin letters and few non-Latin scripts.
 ====================== */
+// Small common English wordlist (lightweight, ~120 words) used for client-side detection.
+const COMMON_ENGLISH_WORDS = new Set([
+  "the","be","to","of","and","a","in","that","have","i","it","for","not","on","with","he","as","you","do","at",
+  "this","but","his","by","from","they","we","say","her","she","or","an","will","my","one","all","would","there",
+  "their","what","so","up","out","if","about","who","get","which","go","me","when","make","can","like","time",
+  "no","just","him","know","take","people","into","year","your","good","some","could","them","see","other","than",
+  "then","now","look","only","come","its","over","think","also","back","after","use","two","how","our","work",
+  "first","well","way","even","new","want","because","any","these","give","day","most","us","is","are","was","were",
+  "been","may","should","must","such","many","each","those","much","own"
+]);
+
 function isProbablyEnglish(text) {
   if (!text || typeof text !== "string") return false;
-  // remove punctuation and digits
-  const letters = text.replace(/[\d\p{P}\p{S}\s]+/gu, "");
-  if (letters.length === 0) return false;
-  // count ASCII letters vs other letters
-  let asciiCount = 0;
-  let nonAsciiCount = 0;
-  for (const ch of letters) {
-    if (/[A-Za-z]/.test(ch)) asciiCount++;
-    else nonAsciiCount++;
+  // quick reject: lots of non-letter scripts (CJK, Arabic, etc.)
+  const nonLatin = text.replace(/[A-Za-z0-9\s\p{P}\p{S}]/gu, "");
+  if (nonLatin.length / Math.max(1, text.length) > 0.5) return false;
+
+  // tokenize into words (letters only)
+  const words = (text.match(/\b[^\d\W_]{2,}\b/gu) || []).map(w => w.toLowerCase());
+  if (!words.length) return false;
+
+  // count how many words are in the small common-English set
+  let common = 0;
+  for (const w of words) {
+    if (COMMON_ENGLISH_WORDS.has(w)) common++;
   }
-  const ratio = asciiCount / (asciiCount + nonAsciiCount);
-  // require at least 40% ascii letters and at least one English word of length>=2
-  const hasEnglishWord = /\b[a-zA-Z]{2,}\b/.test(text);
-  return ratio >= 0.4 && hasEnglishWord;
+
+  const commonRatio = common / words.length;
+  // require at least 25% of words are common English words OR at least one ASCII-only multi-letter word and ascii ratio high
+  const asciiLetters = (text.match(/[A-Za-z]/g) || []).length;
+  const asciiRatio = asciiLetters / Math.max(1, text.replace(/\s+/g, "").length);
+
+  return (commonRatio >= 0.25) || (asciiRatio >= 0.5 && words.some(w => /^[a-z]{2,}$/.test(w)));
 }
 
 /* ======================
