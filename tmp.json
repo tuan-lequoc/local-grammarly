@@ -1,0 +1,5 @@
+curl http://localhost:11434/api/generate   -d '{"model":"qwen2.5:3b","stream":false,"prompt":"You are a grammar correction engine...\nText:\n\"I am go to school\""}'
+
+curl -X POST http://localhost:8080/analyze   -H "Content-Type: application/json"   -d '{"text":"I am go to school"}'
+
+curl http://localhost:11434/api/generate -d '{"model": "qwen2.5:3b","stream": false,"format": "json","prompt": "You are a grammar correction engine.\n\nRules:\n- DO NOT rewrite the whole sentence\n- ONLY detect incorrect fragments\n- Return JSON only\n- No explanation\n- Index based on original text\n\nOutput format:\n{\n  \"errors\": [\n    {\n      \"type\": \"grammar\",\n      \"original\": \"...\",\n      \"correct\": \"...\",\n      \"start\": number,\n      \"end\": number\n    }\n  ]\n}\n\nText:\n\"I am go to school\""}'
