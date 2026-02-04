@@ -37,8 +37,11 @@ function suggestionTooltipEsc(ev) {
 function showSuggestionTooltip(err, rect, targetEl) {
   hideSuggestionTooltip();
   suggestionTooltip = document.createElement("div");
-  suggestionTooltip.style.position = "absolute";
-  suggestionTooltip.style.zIndex = 10000;
+  // use fixed positioning so tooltip is not affected by page transforms/offset parents
+  suggestionTooltip.style.position = "fixed";
+  // very high z-index to avoid being covered by site UI
+  suggestionTooltip.style.zIndex = "2147483647";
+  suggestionTooltip.style.pointerEvents = "auto";
   suggestionTooltip.style.background = "#fff";
   suggestionTooltip.style.border = "1px solid rgba(0,0,0,0.15)";
   suggestionTooltip.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
@@ -155,17 +158,46 @@ function showSuggestionTooltip(err, rect, targetEl) {
   suggestionTooltip.appendChild(btnRow);
 
   document.body.appendChild(suggestionTooltip);
-  // position tooltip near rect
-  const left = rect.left + window.scrollX;
-  let top = rect.bottom + window.scrollY + 8;
-  // adjust if off-screen
-  const tw = suggestionTooltip.getBoundingClientRect().width;
-  if (left + tw > window.scrollX + window.innerWidth) {
-    suggestionTooltip.style.left = Math.max(window.scrollX + 8, window.scrollX + window.innerWidth - tw - 8) + "px";
-  } else {
-    suggestionTooltip.style.left = left + "px";
-  }
-  suggestionTooltip.style.top = top + "px";
+
+  // Ensure the target is visible (nearest). Use center behavior to make room for the tooltip.
+  try {
+    const targetRect = targetEl.getBoundingClientRect();
+    const viewportTop = 0;
+    const viewportBottom = window.innerHeight;
+    if (targetRect.bottom > viewportBottom - 40 || targetRect.top < viewportTop + 40) {
+      targetEl.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+    }
+  } catch (e) {}
+
+  // Defer measurement/positioning to next frame so scroll/layout settle.
+  requestAnimationFrame(() => {
+    try {
+      const r = targetEl.getBoundingClientRect();
+      // measure tooltip now
+      const tb = suggestionTooltip.getBoundingClientRect();
+      const tw = tb.width || suggestionTooltip.offsetWidth;
+      const th = tb.height || suggestionTooltip.offsetHeight;
+      const viewportW = window.innerWidth;
+      const viewportH = window.innerHeight;
+
+      // prefer below the element (centered horizontally)
+      let left = r.left + Math.max(0, (r.width - tw) / 2);
+      // clamp horizontally to viewport
+      left = Math.min(Math.max(left, 8), Math.max(8, viewportW - tw - 8));
+      let top = r.bottom + 8; // below
+      // if not enough space below, place above
+      if (top + th > viewportH - 8) {
+        top = r.top - th - 8;
+      }
+      // clamp vertically
+      if (top < 8) top = 8;
+
+      suggestionTooltip.style.left = left + "px";
+      suggestionTooltip.style.top = top + "px";
+    } catch (e) {
+      console.error("[Local Grammarly] tooltip positioning failed:", e);
+    }
+  });
 
   // close on outside click or Esc
   setTimeout(() => {
